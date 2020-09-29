@@ -1,17 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
+import ASCII
 import Data.Aeson
 import Data.Text as T
+import Data.Text.Encoding
 import Data.ByteString.Lazy as B
+
+import Text.Printf
 
 import GHC.Generics
 
 import Control.Monad
 import Control.Lens ( preview )
 import Data.Aeson.Lens ( key, _String)
-
-import qualified Data.ByteString.Char8  as BS
 
 data TranslatedKeys = TranslatedKeys
     { translatedKeys :: [T.Text]
@@ -21,17 +23,19 @@ instance FromJSON TranslatedKeys
 
 printKeys :: Maybe [T.Text] -> IO ()
 printKeys Nothing = print "error loading translated keys"
-printKeys (Just translatedKeys) = forM_ translatedKeys (readTranslateFromFile)
+printKeys (Just translatedKeys) = readTranslateFromFile translatedKeys
 
 getTranslateByKey :: Text -> ByteString -> Maybe Text
 getTranslateByKey translateKey  = preview (key translateKey .  _String)
 
-readTranslateFromFile :: Text -> IO ()
-readTranslateFromFile key = do
-    jsonData <- B.readFile "data.json"
-    case getTranslateByKey key jsonData of
-        Nothing -> print "error loading translations"
-        Just translations -> print translations
+readTranslateFromFile translatedKeys = do
+    forM_ translatedKeys printTranslatedKey
+        where
+            printTranslatedKey translateKey = do
+                jsonData <- B.readFile "data.json" 
+                case getTranslateByKey translateKey jsonData of
+                    Nothing -> Prelude.appendFile "test.json" $ ("errro " ++ (T.unpack translateKey) ++ "\n")
+                    Just translations -> Prelude.appendFile "test.json" $ (T.unpack translations ++ "\n")
 
 main :: IO ()
 main = do
