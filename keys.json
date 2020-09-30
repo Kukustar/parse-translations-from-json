@@ -1,3 +1,9 @@
 {
-    "translatedKeys": ["searching key", "searching key 2", "searching key 3"]
+    "translatedKeys": [
+        "Account type",
+        "Leverage",
+        "Currency",
+        "Initial deposit",
+        "Open demo account"
+    ]
 }
