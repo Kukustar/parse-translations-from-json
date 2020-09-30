@@ -27,25 +27,29 @@ data TranslatedKeys = TranslatedKeys
 
 instance FromJSON TranslatedKeys
 
-printKeys :: Maybe [T.Text] -> IO ()
-printKeys Nothing = print "error loading translated keys"
-printKeys (Just translatedKeys) = readTranslateFromFile translatedKeys
+data JsonEnv = JsonEnv
+    { host :: Text
+    , path :: Text
+    , queryLangs :: [Text]
+    } deriving (Show,Generic)
+
+instance FromJSON JsonEnv
 
 getTranslateByKey :: Text -> ByteString -> Maybe Text
 getTranslateByKey translateKey  = preview (key translateKey . _String)
 
-readTranslateFromFile translatedKeys = do
-    Prelude.appendFile "en.json" "{\n"
+readTranslateFromFile translatedKeys queryLang = do
+    Prelude.appendFile ((T.unpack queryLang) ++ ".json") "{\n"
     forM_ translatedKeys printTranslatedKey
-    Prelude.appendFile "en.json" "}"
+    Prelude.appendFile ((T.unpack queryLang) ++ ".json") "}"
         where
-            -- todo убрать запятые из конца файла
+            -- todo do not add ',' in the last json key
             createJsonKeyValue jKey jValue = ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\",\n" )
             printTranslatedKey translateKey = do
-                jsonData <- B.readFile "translations_en.json"
+                jsonData <- B.readFile $ "translations_" ++ (T.unpack queryLang) ++ ".json"
                 case getTranslateByKey translateKey jsonData of
-                    Nothing -> Prelude.appendFile "en.json" $ createJsonKeyValue translateKey translateKey
-                    Just translations -> Prelude.appendFile "en.json" $ createJsonKeyValue translateKey translations
+                    Nothing -> Prelude.appendFile ((T.unpack queryLang) ++ ".json") $ createJsonKeyValue translateKey translateKey
+                    Just translations -> Prelude.appendFile ((T.unpack queryLang) ++ ".json") $ createJsonKeyValue translateKey translations
 
 buildRequest :: BC.ByteString
              -> BC.ByteString
@@ -57,25 +61,41 @@ buildRequest host method path =
     $ setRequestPath path defaultRequest
 
 
-fetchJSON ::  IO BC.ByteString
-fetchJSON = do
-  let host = "social-mt5.tifia.com" :: BC.ByteString
-  let path = "/en/api/translate/get-translations?lang=en"
---   let queryString = "lang=en" :: Q
-  let request = buildRequest host "GET" path  :: Request
+-- fetchJSON ::  IO BC.ByteString
+fetchJSON host path queryLang = do
+  let request = prepareRequest host path queryLang
   result <- httpBS request
   return (getResponseBody result)                    
 
-loadTranslitions :: IO ()
-loadTranslitions = do
-    translations <- fetchJSON 
-    BC.writeFile "translations_en.json" translations
+prepareRequest :: Text -> Text -> Text -> Request
+prepareRequest host path queryLang  = 
+    let 
+        convertedHost = encodeUtf8 (host) :: BC.ByteString
+        convertedPath = encodeUtf8 (T.concat [path, queryLang]) :: BC.ByteString
+    in buildRequest convertedHost "GET" convertedPath :: Request
+
+loadTranslitions host path queryLangs translatedKeys  = do    
+    forM_ queryLangs helper
+    forM_ queryLangs helper'
+        where
+            helper queryLang = do
+                translations <- fetchJSON host path queryLang
+                BC.writeFile ("translations_" ++  (T.unpack queryLang) ++ ".json") translations
+            helper' queryLang = readTranslateFromFile translatedKeys queryLang
+
+loadTranslateJson translatedKeys = do
+    jsonEnv <- B.readFile "jsonEnv.json"
+    let jsonEnvData = decode jsonEnv :: Maybe JsonEnv
+    case jsonEnvData of 
+        Just (JsonEnv host path queryLangs ) -> loadTranslitions host path queryLangs translatedKeys
+        Nothing -> print "error"
+
+
             
 main :: IO ()
 main = do
-    -- let url = "/en/api/translate/get-translations?lang=en" :: BC.ByteString
-    loadTranslitions 
     jsonKeys <- B.readFile "keys.json"
     let dataKeys = decode jsonKeys :: Maybe TranslatedKeys
-    let keys = translatedKeys <$> dataKeys
-    printKeys keys
+    case dataKeys of 
+        Nothing -> print "error loading translation keys"
+        Just (TranslatedKeys translatedKeys) -> loadTranslateJson translatedKeys
