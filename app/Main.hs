@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-
+-- TODO add add all functions for libs
 module Main where
 
 import Data.Aeson
@@ -20,6 +20,7 @@ import qualified Data.ByteString.Char8  as BC
 import           Network.HTTP.Simple
 import           Network.HTTP.Types.Header
 import           Network.HTTP.Types.Status
+
 
 data TranslatedKeys = TranslatedKeys
     { translatedKeys :: [T.Text]
@@ -81,6 +82,7 @@ loadTranslitions host path queryLangs translatedKeys  = do
             helper queryLang = do
                 translations <- fetchJSON host path queryLang
                 BC.writeFile ("translations_" ++  (T.unpack queryLang) ++ ".json") translations
+                -- todo delete files after end
             helper' queryLang = readTranslateFromFile translatedKeys queryLang
 
 loadTranslateJson translatedKeys = do
@@ -94,6 +96,7 @@ loadTranslateJson translatedKeys = do
             
 main :: IO ()
 main = do
+    -- add support for flags
     jsonKeys <- B.readFile "keys.json"
     let dataKeys = decode jsonKeys :: Maybe TranslatedKeys
     case dataKeys of 
