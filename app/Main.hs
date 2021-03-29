@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-
+-- TODO add add all functions for libs
 module Main where
 
 import Data.Aeson
@@ -15,11 +15,12 @@ import Control.Monad
 import Control.Lens ( preview )
 import Data.Aeson.Lens ( key, _String)
 
--- network 
+-- network
 import qualified Data.ByteString.Char8  as BC
 import           Network.HTTP.Simple
 import           Network.HTTP.Types.Header
 import           Network.HTTP.Types.Status
+
 
 data TranslatedKeys = TranslatedKeys
     { translatedKeys :: [T.Text]
@@ -43,7 +44,7 @@ readTranslateFromFile translatedKeys queryLang lastWord = do
     forM_ translatedKeys printTranslatedKey
     Prelude.appendFile ((T.unpack queryLang) ++ ".json") "}"
         where
-            createJsonKeyValue jKey jValue = if (lastWord == jKey) 
+            createJsonKeyValue jKey jValue = if (lastWord == jKey)
                 then ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\"\n" )
                 else ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\",\n" )
             printTranslatedKey translateKey = do
@@ -66,39 +67,41 @@ buildRequest host method path =
 fetchJSON host path queryLang = do
   let request = prepareRequest host path queryLang
   result <- httpBS request
-  return (getResponseBody result)                    
+  return (getResponseBody result)
 
 prepareRequest :: Text -> Text -> Text -> Request
-prepareRequest host path queryLang  = 
-    let 
+prepareRequest host path queryLang  =
+    let
         convertedHost = encodeUtf8 (host) :: BC.ByteString
         convertedPath = encodeUtf8 (T.concat [path, queryLang]) :: BC.ByteString
     in buildRequest convertedHost "GET" convertedPath :: Request
 
 loadTranslitions host path queryLangs translatedKeys = do
-    forM_ queryLangs helper 
+    forM_ queryLangs helper
     forM_ queryLangs helper'
         where
             helper queryLang = do
                 translations <- fetchJSON host path queryLang
                 BC.writeFile ("translations_" ++  (T.unpack queryLang) ++ ".json") translations
+                -- todo delete files after end
             helper' queryLang = do
-                readTranslateFromFile translatedKeys queryLang lastWorld    
+                readTranslateFromFile translatedKeys queryLang lastWorld
                 where lastWorld = Prelude.last(translatedKeys)
 
 loadTranslateJson translatedKeys = do
     jsonEnv <- B.readFile "jsonEnv.json"
     let jsonEnvData = decode jsonEnv :: Maybe JsonEnv
-    case jsonEnvData of 
+    case jsonEnvData of
         Just (JsonEnv host path queryLangs ) -> loadTranslitions host path queryLangs translatedKeys
         Nothing -> print "error"
 
 
-            
+
 main :: IO ()
 main = do
+    -- add support for flags
     jsonKeys <- B.readFile "keys.json"
     let dataKeys = decode jsonKeys :: Maybe TranslatedKeys
-    case dataKeys of 
+    case dataKeys of
         Nothing -> print "error loading translation keys"
         Just (TranslatedKeys translatedKeys) -> loadTranslateJson translatedKeys
