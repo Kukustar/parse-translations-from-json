@@ -15,7 +15,7 @@ import Control.Monad
 import Control.Lens ( preview )
 import Data.Aeson.Lens ( key, _String)
 
--- network 
+-- network
 import qualified Data.ByteString.Char8  as BC
 import           Network.HTTP.Simple
 import           Network.HTTP.Types.Header
@@ -39,13 +39,14 @@ instance FromJSON JsonEnv
 getTranslateByKey :: Text -> ByteString -> Maybe Text
 getTranslateByKey translateKey  = preview (key translateKey . _String)
 
-readTranslateFromFile translatedKeys queryLang = do
+readTranslateFromFile translatedKeys queryLang lastWord = do
     Prelude.appendFile ((T.unpack queryLang) ++ ".json") "{\n"
     forM_ translatedKeys printTranslatedKey
     Prelude.appendFile ((T.unpack queryLang) ++ ".json") "}"
         where
-            -- todo do not add ',' in the last json key
-            createJsonKeyValue jKey jValue = ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\",\n" )
+            createJsonKeyValue jKey jValue = if (lastWord == jKey)
+                then ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\"\n" )
+                else ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\",\n" )
             printTranslatedKey translateKey = do
                 jsonData <- B.readFile $ "translations_" ++ (T.unpack queryLang) ++ ".json"
                 case getTranslateByKey translateKey jsonData of
@@ -66,16 +67,16 @@ buildRequest host method path =
 fetchJSON host path queryLang = do
   let request = prepareRequest host path queryLang
   result <- httpBS request
-  return (getResponseBody result)                    
+  return (getResponseBody result)
 
 prepareRequest :: Text -> Text -> Text -> Request
-prepareRequest host path queryLang  = 
-    let 
+prepareRequest host path queryLang  =
+    let
         convertedHost = encodeUtf8 (host) :: BC.ByteString
         convertedPath = encodeUtf8 (T.concat [path, queryLang]) :: BC.ByteString
     in buildRequest convertedHost "GET" convertedPath :: Request
 
-loadTranslitions host path queryLangs translatedKeys  = do    
+loadTranslitions host path queryLangs translatedKeys = do
     forM_ queryLangs helper
     forM_ queryLangs helper'
         where
@@ -83,22 +84,24 @@ loadTranslitions host path queryLangs translatedKeys  = do
                 translations <- fetchJSON host path queryLang
                 BC.writeFile ("translations_" ++  (T.unpack queryLang) ++ ".json") translations
                 -- todo delete files after end
-            helper' queryLang = readTranslateFromFile translatedKeys queryLang
+            helper' queryLang = do
+                readTranslateFromFile translatedKeys queryLang lastWorld
+                where lastWorld = Prelude.last(translatedKeys)
 
 loadTranslateJson translatedKeys = do
     jsonEnv <- B.readFile "jsonEnv.json"
     let jsonEnvData = decode jsonEnv :: Maybe JsonEnv
-    case jsonEnvData of 
+    case jsonEnvData of
         Just (JsonEnv host path queryLangs ) -> loadTranslitions host path queryLangs translatedKeys
         Nothing -> print "error"
 
 
-            
+
 main :: IO ()
 main = do
     -- add support for flags
     jsonKeys <- B.readFile "keys.json"
     let dataKeys = decode jsonKeys :: Maybe TranslatedKeys
-    case dataKeys of 
+    case dataKeys of
         Nothing -> print "error loading translation keys"
         Just (TranslatedKeys translatedKeys) -> loadTranslateJson translatedKeys
