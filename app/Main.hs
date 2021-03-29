@@ -38,15 +38,14 @@ instance FromJSON JsonEnv
 getTranslateByKey :: Text -> ByteString -> Maybe Text
 getTranslateByKey translateKey  = preview (key translateKey . _String)
 
-readTranslateFromFile translatedKeys queryLang = do
+readTranslateFromFile translatedKeys queryLang lastWord = do
     Prelude.appendFile ((T.unpack queryLang) ++ ".json") "{\n"
     forM_ translatedKeys printTranslatedKey
     Prelude.appendFile ((T.unpack queryLang) ++ ".json") "}"
         where
-            createJsonKeyValue jKey jValue = if (lastElem == jKey) 
+            createJsonKeyValue jKey jValue = if (lastWord == jKey) 
                 then ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\"\n" )
                 else ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\",\n" )
-                where lastElem = Prelude.last(translatedKeys)
             printTranslatedKey translateKey = do
                 jsonData <- B.readFile $ "translations_" ++ (T.unpack queryLang) ++ ".json"
                 case getTranslateByKey translateKey jsonData of
@@ -76,14 +75,16 @@ prepareRequest host path queryLang  =
         convertedPath = encodeUtf8 (T.concat [path, queryLang]) :: BC.ByteString
     in buildRequest convertedHost "GET" convertedPath :: Request
 
-loadTranslitions host path queryLangs translatedKeys  = do    
-    forM_ queryLangs helper
+loadTranslitions host path queryLangs translatedKeys = do
+    forM_ queryLangs helper 
     forM_ queryLangs helper'
         where
             helper queryLang = do
                 translations <- fetchJSON host path queryLang
                 BC.writeFile ("translations_" ++  (T.unpack queryLang) ++ ".json") translations
-            helper' queryLang = readTranslateFromFile translatedKeys queryLang
+            helper' queryLang = do
+                readTranslateFromFile translatedKeys queryLang lastWorld    
+                where lastWorld = Prelude.last(translatedKeys)
 
 loadTranslateJson translatedKeys = do
     jsonEnv <- B.readFile "jsonEnv.json"
