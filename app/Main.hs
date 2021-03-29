@@ -43,8 +43,10 @@ readTranslateFromFile translatedKeys queryLang = do
     forM_ translatedKeys printTranslatedKey
     Prelude.appendFile ((T.unpack queryLang) ++ ".json") "}"
         where
-            -- todo do not add ',' in the last json key
-            createJsonKeyValue jKey jValue = ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\",\n" )
+            createJsonKeyValue jKey jValue = if (lastElem == jKey) 
+                then ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\"\n" )
+                else ("\t\"" ++ (T.unpack jKey) ++ "\"" ++ ": \"" ++ (T.unpack jValue) ++ "\",\n" )
+                where lastElem = Prelude.last(translatedKeys)
             printTranslatedKey translateKey = do
                 jsonData <- B.readFile $ "translations_" ++ (T.unpack queryLang) ++ ".json"
                 case getTranslateByKey translateKey jsonData of
